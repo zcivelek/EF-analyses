@@ -1,0 +1,614 @@
+---
+title: "WM tasks - Markdown"
+author: "Christoph Voelter"
+date: "January 22, 2019"
+output:
+  html_document:
+    fig_caption: yes
+    theme: united
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+  pdf_document:
+    toc: yes
+    toc_depth: '3'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(lme4)
+library(readr)
+library(tidyverse)
+library(sjPlot)
+library(ggthemes)
+library(gridExtra)
+library(ggpubr)
+library(corrr)
+library(reshape2)
+#library(Hmisc)
+#library("PerformanceAnalytics")
+source("C:/Users/cjv3/R/R scripts/Roger/diagnostic_fcns.r")
+source("C:/Users/cjv3/R/R scripts/Roger/glmm_stability.r")
+source("C:/Users/cjv3/R/R scripts/Roger/boxplotteR.r")
+source("C:/Users/cjv3/R/R scripts/Roger/boot_glmm.r")
+source("C:/Users/cjv3/R/R scripts/Roger/corr_exact.r")
+#load(file ="mm1_mult_poss.RData")
+#readRDS(file ="multpos_model.rds")
+```
+
+```{r loading data, include = FALSE}
+#Preparing code for mixed modeling. 
+updating.data <- read.table(file="data/20181121 WM updating data.txt", header=T, sep="\t")
+updatingtraining.data <- read.table(file="data/20181121 WM updating training data.txt", header=T, sep="\t")
+updating.data2 <- read.table(file="data/20190120 Updating_test2_data.txt", header=T, sep="\t") 
+updatingtraining.data2 <- read.table(file="data/20190120 WM updating training data2.txt", header=T, sep="\t") %>%
+  filter(Subject!="George") ##George was a drop-out, only completed few trials and only in the 2 box condition
+
+boxes.data <- read.table(file="data/20181121 WM boxes data.txt", header=T, sep="\t")
+grid.data <- read.table(file="data/20181122 WM grid data.txt", header=T, sep="\t")
+```
+
+```{r include=FALSE}
+summary(updating.data2)
+
+```
+
+
+##Summary  
+* Chimpanzees (N=28) performed above chance in the the __WM Grid task__ (DV: distance between chosen cell location and the hiding location of the food) and the __WM Boxes task__ (DV: count of mistakes on platform 1) but not in the __WM Updating task__ (DV: with 4 boxes: count of mistakes on platform 1 within the first 4 attempts; with 3 boxes: count of mistakes on platform 1 within the first 3 attempts; this is also the case for other DVs).In the Updating task, chimpanzees only performed above chance in the one-platform training with 3 boxes.  
+
+* Correlation coefficients between the original updating task and the grid / boxes task are positive (and some are statistically significant, e.g. between the grid distance DV and updating Platform 1 performance with 4 boxes) but larger sample sizes are needed before any conclusions can be drawn. The second version of the updating task that we conducted at the end of the data collection does not yield higher correlation coefficiencts with the other WM tasks.  
+
+
+```{r preparing data for correlation, include=FALSE}
+
+###Plotting side_changes
+grid_individual2 <- grid.data %>%
+  filter(!is.na(NrUntilfindGrid)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Type == "test")%>%
+  group_by(Subject) %>% 
+  summarize(grid_numberAttempts = mean(NrUntilfindGrid)) 
+
+grid_individual <- grid.data %>%
+  filter(!is.na(distance_c01)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Type == "test")%>%
+  group_by(Subject) %>% 
+  summarize(Grid_Distance = mean(distance_c01)) 
+
+grid_individual3 <- grid.data %>%
+  filter(!is.na(choice1_correct)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Type == "test")%>%
+  group_by(Subject) %>% 
+  summarize(grid_choice1c = mean(choice1_correct)) 
+
+
+##########################################################
+#Boxes
+
+box_individual <- boxes.data %>%
+  filter(!is.na(count_mistakes)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Condition == "test")%>%
+  group_by(Subject) %>% 
+  summarize(boxes_mistakes = mean(count_mistakes)) 
+
+box_individual2 <- boxes.data %>%
+  filter(!is.na(Correct_P1)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Condition == "test")%>%
+  mutate(P1_mistakes = 1 - Correct_P1)%>%
+  group_by(Subject) %>% 
+  summarize(Boxes_P1.mistakes = mean(P1_mistakes)) 
+
+##########################################################
+#Updating Test
+##Diff score
+updating_individual <- updating.data %>%
+  filter(!is.na(diff_score)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  group_by(Subject) %>% 
+  summarize(updating_diffscore = mean(diff_score))
+##Redundant search
+updating_individual2 <- updating.data %>%
+  filter(!is.na(redundant_searches)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  group_by(Subject) %>% 
+  summarize(updating_redSearch = mean(redundant_searches))
+
+##Number of retrieved food items
+updating_individual3 <- updating.data %>%
+  filter(!is.na(number_retr_food)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  group_by(Subject) %>% 
+  summarize(updating_retrfood = mean(number_retr_food))
+
+## First 4 choices on both platforms
+updating_individual4 <- updating.data %>%
+  filter(!is.na(P1P2_first4)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  group_by(Subject) %>% 
+  summarize(updating_P1P2_first4 = mean(P1P2_first4))
+
+##First 4 choices on platform 1
+updating_individual5 <- updating.data %>%
+  filter(!is.na(P1_first4)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  mutate(P1_redSearch = 4 - P1_first4)%>%
+  group_by(Subject) %>% 
+  summarize(Updating_P1.mistakes = mean(P1_redSearch))
+
+#Updating Training
+
+##number of redundant searches
+
+updatingtraining_individual <- updatingtraining.data %>%
+  filter(!is.na(number_redundant_searched)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  group_by(Subject) %>% 
+  summarize(updatingTraining_redSearch = mean(number_redundant_searched))
+
+##5 boxes -number of redundant searches
+updatingtraining_5boxes <- updatingtraining.data %>%
+  filter(!is.na(number_redundant_searched)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Number_boxes==5)%>%
+  group_by(Subject) %>% 
+  summarize(Updating_5Boxes.Mistakes = mean(number_redundant_searched))
+
+##4 boxes -number of redundant searches
+updatingtraining_4boxes <- updatingtraining.data %>%
+  filter(!is.na(number_redundant_searched)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Number_boxes==4)%>%
+  group_by(Subject) %>% 
+  summarize(Updating_4Boxes.Mistakes = mean(number_redundant_searched))
+
+
+##4 boxes -number of redundant searches - first four choices
+updatingtraining_4boxes_2 <- updatingtraining.data %>%
+  filter(!is.na(number_redundant_searched)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Number_boxes==4)%>%
+  mutate(P1_first4 = second_choice_correct+third_choice_correct+fourth_choice_correct+1)%>%
+  mutate(P1_redSearch = 4 - P1_first4)%>%
+  group_by(Subject) %>% 
+  summarize(updatingTraining4_first4 = mean(P1_redSearch))
+
+##5 boxes -number of redundant searches - first five choices
+updatingtraining_5boxes_2 <- updatingtraining.data %>%
+  filter(!is.na(number_redundant_searched)) %>%
+  filter(Subject != "George" & Subject != "Saidia")%>%
+  filter(Number_boxes==5)%>%
+  mutate(P1_first5 = second_choice_correct+third_choice_correct+fourth_choice_correct+fifth_choice_correct+1)%>%
+  mutate(P1_redSearch = 5 - P1_first5)%>%
+  group_by(Subject) %>% 
+  summarize(updatingTraining5_first5_2 = mean(P1_redSearch))
+
+############################################################
+#Updating 2 - training. Notes: Alikaka could not be tested, George was a drop-out
+##2 boxes -number of redundant searches - first two choices
+updatingtraining2_2boxes <- updatingtraining.data2 %>%
+  filter(!is.na(number_redundant_searched)) %>%
+  filter(Number_boxes==2)%>%
+  group_by(Subject) %>% 
+  summarize(updatingtraining2_2boxes_corr = mean(number_redundant_searched)) 
+
+
+##3 boxes -number of redundant searches - first two choices
+updatingtraining2_3boxes <- updatingtraining.data2 %>%
+  filter(!is.na(number_redundant_searched)) %>%
+  filter(Number_boxes==3)%>%
+  group_by(Subject) %>% 
+  summarize(updatingtraining2_3boxesredsearch = mean(number_redundant_searched)) 
+
+##########################################################
+#Updating Test 2
+##Diff score
+updating2_individual <- updating.data2 %>%
+  filter(!is.na(diff_score)) %>%
+  group_by(Subject) %>% 
+  summarize(updating2_diffscore = mean(diff_score))
+##Redundant search
+updating2_individual2 <- updating.data2 %>%
+  filter(!is.na(redundant_searches)) %>%
+  group_by(Subject) %>% 
+  summarize(Updating2_mistakes = mean(redundant_searches))
+
+##Number of retrieved food items
+updating2_individual3 <- updating.data2 %>%
+  filter(!is.na(number_retr_food)) %>%
+  group_by(Subject) %>% 
+  summarize(updating2_retrfood = mean(number_retr_food))
+
+##First 3 choices on platform 1
+updating2_individual4 <- updating.data2 %>%
+  filter(!is.na(P1_first3)) %>%
+  mutate(P1_redSearch = 3 - P1_first3)%>%
+  group_by(Subject) %>% 
+  summarize(Updating2_P1.mistakes = mean(P1_redSearch))
+
+
+#######################################################
+#Join DVs together
+WM_task_individual <- updating_individual5  %>% 
+  #inner_join(updating_individual2) %>%
+  #inner_join(updating_individual3)%>%
+  #inner_join(updating_individual4)%>% #P1P2_first4
+  #full_join(updating_individual)%>% #P1_first4
+  #inner_join(updatingtraining_individual) %>%
+  #full_join(updatingtraining_4boxes)%>%
+  #full_join(updatingtraining_5boxes)%>%
+  #full_join(updatingtraining2_2boxes)%>%
+  #full_join(updatingtraining2_3boxes)%>%
+  #full_join(updating2_individual)%>%
+  #full_join(updating2_individual2)%>%
+  #full_join(updating2_individual3)%>%
+  full_join(updating2_individual4)%>%
+  #inner_join(updatingtraining_4boxes_2)%>% #first four choices - redundant search
+  #inner_join(updatingtraining_5boxes_2)%>% #first four choices - redundant search
+  #inner_join(box_individual) %>% #count_mistakes
+  full_join(box_individual2) %>% #correct P1
+  full_join(grid_individual) #%>% #distance
+  #inner_join(grid_individual2) %>% #NrUntilfindGrid
+  #inner_join(grid_individual3)#%>% #choice1_correct
+  #filter(Subject != "Roy")
+```
+
+
+
+```{r fig.cap="Plotted DVs: Updating tasks: mean number of redundant searches on platform 1 per individual. WM boxes: mean number of mistakes on platform 1 per individual. WM Grid: distance between first choice and the location of the food reward. Dashed line: chance level. Smaller values indicate better performance in all three tasks / DVs.", echo=FALSE}
+
+###Updating task
+
+##First 4 choices on platform 1
+
+Updating_plot<-WM_task_individual %>%  add_count(Updating_P1.mistakes)
+
+#max(WM_task_individual$Updating_P1.mistakes) 
+
+ 
+p1<-  ggplot(
+  data=Updating_plot, aes(x=rep(1, 28), y=Updating_P1.mistakes)) +
+  geom_boxplot()+
+  ylim(0,3)+
+  xlim(0,2)+
+  geom_point(size = Updating_plot$n, colour = "purple") +
+#  geom_line(lty=2)+
+  labs(x="",y="Mean number of redundant choices")+
+  theme_few()+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  ggtitle("Updating 1")+
+  geom_hline(yintercept=1.265, linetype="dashed", color = "red")
+
+
+###Updating task 2
+
+
+##First 3 choices on platform 1
+
+Updating_plot2<-WM_task_individual %>%
+  filter(!is.na(Updating2_P1.mistakes))%>%
+  add_count(Updating2_P1.mistakes)
+
+#max(WM_task_individual$Updating_P1.mistakes) 
+
+ 
+p2<-  ggplot(
+  data=Updating_plot2, aes(x=rep(1, 26), y=Updating2_P1.mistakes)) +
+  geom_boxplot()+
+  ylim(0,2)+
+  xlim(0,2)+
+  geom_point(size = Updating_plot2$n, colour = "purple") +
+#  geom_line(lty=2)+
+  labs(x="",y="Mean number of redundant choices")+
+  theme_few()+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  ggtitle("Updating 2")+
+  geom_hline(yintercept=8/9, linetype="dashed", color = "red")
+
+
+###Boxes task
+
+##platform 1 - count mistakes
+
+Boxes_plotting<-WM_task_individual %>%  add_count(Boxes_P1.mistakes)
+
+#max(Boxes_plotting$Boxes_P1.mistakes) 
+
+ 
+p3<-  ggplot(
+  data=Boxes_plotting, aes(x=rep(1, 28), y=Boxes_P1.mistakes)) +
+  geom_boxplot()+
+  ylim(0,1)+
+  xlim(0,2)+
+  geom_point(size = Boxes_plotting$n, colour = "purple") +
+#  geom_line(lty=2)+
+  labs(x="",y="Mean number of mistakes")+
+  theme_few()+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  ggtitle("WM Boxes")+
+  geom_hline(yintercept=0.75, linetype="dashed", color = "red")
+  
+
+###Grid task
+
+##platform 1 - count mistakes
+
+Grid_plotting<-WM_task_individual %>%  add_count(Grid_Distance)
+
+#max(Grid_plotting$Grid_Distance) 
+
+ 
+p4<-  ggplot(
+  data=Grid_plotting, aes(x=rep(1, 28), y=Grid_Distance)) +
+  geom_boxplot()+
+  ylim(0,2)+
+  xlim(0,2)+
+  geom_point(size = Grid_plotting$n, colour = "purple") +
+#  geom_line(lty=2)+
+  labs(x="",y="Mean distance from food reward")+
+  theme_few()+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  ggtitle("WM Grid")+
+  geom_hline(yintercept=1.667, linetype="dashed", color = "red")
+
+
+grid.arrange(p1, p2,p3,p4, nrow = 1, heights=unit(100, "mm"))
+
+```
+  
+***  
+
+
+\pagebreak  
+
+##Updating task 1 (2 x 4 boxes in test)
+
+
+###Methods 
+
+####Materials: 
+We use two adjacent sliding platforms on top of tables (w x d x h: 76 x 40 x 62) outside the enclosure, opaque boxes (2 sets of 4 visually distinct boxes plus one additional box: brown bottle: 7.5h x 5 x 5; green box: 5.5 x 5.5 x 4.5h; orange heart: 7.5 x 6 x 3.5h, yellow box: 6 x 6 x 4h; additional box: blue box: 5 x 5 x 5), and one occluder warm-up occluder: h x w: 43 x 66; free-standing occluder: h x d x w: 38 x 22 x 64).
+
+```{r updating_setup, fig.cap="Updating test: identical box condition.", echo=FALSE}
+
+knitr::include_graphics('pictures/wm_updating_setup.png')
+```
+ 
+ 
+####Procedure  
+Subjects watch how a number of opaque boxes are baited (reward: 1/16 piece of apple). Subjects can choose one box after the other with a 10-s retention interval in between each choice (boxes will be occluded during retention interval). To retrieve all of the food items as efficiently as possible subjects need to remember their previous choices (and avoid them).
+
+#####Warm-up (session 1)  
+Subjects are tested individually. The experimenter sits behind a sliding platform facing the subject. Four or five opaque boxes with lids serve as hiding places of food rewards. The boxes differ in colour and shape but are similar in size. The location of each box on the platform remains constant across subjects and trials. 
+A trial starts when the subject approaches the sliding platform and looks toward the experimenter (E). E baits all the boxes on the table in full view of the subject (from left to right). After the baiting, E shows the content of each box to the subject by tilting it toward the subject right before he places the lid on top of the box. Once the boxes are closed the subjects can no longer see the food rewards inside. After the baiting of the boxes, E pushes the sliding platform forward (while looking to the floor to avoid any inadvertent cuing) and allows the subject to choose one of the boxes by reaching toward and touching a box. E opens the indicated box and passes the reward to the subject. Before closing the box again, E shows the empty box to the subject with the open side facing toward the subject. E closes the box and places the now empty box back on the platform in its previous location. E occludes the platform for 10 seconds by holding an opaque PVC board in between the boxes and the ape, to avoid visual tracking of the containers. Importantly, E does not change the locations or the baiting status of the boxes during the delay. E’s hands are visible to the subject during the entire delay to emphasize that the status of boxes remained unchanged. After the delay, E removes the occluder and the subject is allowed to choose again. In case the subject revisits a box, E opens the indicated empty box, shows its content to the subject, closes the box again, and places it back in its previous position. Then E occludes the boxes again, and the next 10-sec delay period starts. 
+This procedure is repeated until subjects have retrieved all food items or until they made five mistakes within the same trial. After the last choice in a trial, E opens all boxes on the platform and discards the remaining food items in a food bucket underneath the platform in full view of the subject.
+All individuals first receive three trials with four boxes and then three trials with five boxes. 
+
+#####Test (session 2)  
+In the test, we use two adjacent platforms (platform 1 and 2). At the beginning of each trial, E places four boxes each on platform 1 and 2. E then baits and closes the boxes on platform 1 and 2 and places a free-standing occluder on platform 2. Subjects can now choose a box on platform 1. E opens the indicated box, passes the food reward from inside the box to the subject, and closes the box again in the same manner as in the training. After the first choice, E moves the occluder from platform 2 to platform 1 and occludes the boxes on platform 1. Subjects can now choose from platform 2. E then transfers the occluder from platform 1 to platform 2 and subjects can choose again from platform 1. This procedure is repeated until subjects have retrieved all food items on one platform or until they made 6 mistakes. In between each choice there is a 10 seconds retention interval. All individuals receive four test trials.  
+
+####Scoring   
+We score the number of mistakes per trial (0 – 6) and also the number of mistakes within the first four choices on platform 1. With 4 test trials, the number of mistakes can vary between 0 and 24.  
+
+###Results  
+
+```{r include=FALSE}
+#Updating - training - 5 boxes
+mean(updating_individual$updating_diffscore)
+mean(updating_individual2$updating_redSearch)
+mean(updating_individual5$P1_redSearch)
+mean(updating_individual4$updating_P1P2_first4)
+```
+
+Comparison to simulation of random sampling (drawing without replacement) based on 100000 iterations. The mean number of unique and repeated choices is computed from these simulations and used as the hypothetical chance value. 
+
+####Training performance
+
+#####4 Boxes training: 
+```{r echo=FALSE}
+tt<-t.test( updatingtraining_4boxes$Updating_4Boxes.Mistakes, mu=3.16, alternative = "two.sided")
+
+```
+* Number of redundant searches with 4 boxes (up to 5 redundant searches) vs chance value (3.16): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+
+```{r echo=FALSE}
+tt<-t.test( updatingtraining_4boxes_2$updatingTraining4_first4, mu=1.26, alternative = "two.sided")
+```
+* Number of redundant searches with 4 boxes (first 4 choices) vs chance value (1.26): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+
+#####5 Boxes training: 
+```{r echo=FALSE}
+tt<-t.test( updatingtraining_5boxes$Updating_5Boxes.Mistakes, mu=3.88, alternative = "two.sided")
+```
+* Number of redundant searches with 5 boxes (up to 5 mistakes) vs chance value (3.88): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+
+
+```{r echo=FALSE}
+tt<-t.test(updatingtraining_5boxes_2$updatingTraining5_first5_2, mu=1.63, alternative = "two.sided")
+```
+* Number of redundant searches with 5 boxes (first 5 choices) vs chance value (1.63): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+####Test performance
+```{r echo=FALSE}
+tt<-t.test(updating_individual2$updating_redSearch , mu=4.75, alternative = "two.sided")
+```
+* Number of redundant searches with test trials (platform 1 and 2; up to 6 redundant searches) vs chance value (4.75): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+
+```{r echo=FALSE}
+tt<-t.test(updating_individual5$Updating_P1.mistakes , mu=1.265, alternative = "two.sided")
+```
+* Number of redundant searches with test trials (platform 1: first 4 choices) vs chance value (1.265): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+***  
+
+##Updating task 2 (2 x 3 boxes in test)
+
+###Methods  
+Same as in updating 1 except that the training included only 2 and 3 boxes. The test included two identical sets of three boxes on two adjacent platforms. In the training and the test, a trial ended when subjects could have retrieved all food items (e.g., with three boxes after three choices).
+  
+####Training performance  
+
+
+```{r echo=FALSE}
+tt<-t.test(updatingtraining2_3boxes$updatingtraining2_3boxesredsearch, mu=8/9, alternative = "two.sided")
+```
+* Number of redundant searches with 3 boxes (3 choices) vs chance value (0.89): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+
+
+####Test performance  
+
+```{r echo=FALSE}
+tt<-t.test(updating2_individual2$Updating2_mistakes , mu=16/9, alternative = "two.sided")
+```
+* Number of redundant searches with test trials (platform 1 and 2; 6 choices in total) vs chance value (1.78): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+
+```{r echo=FALSE}
+tt<-t.test(updating2_individual4$Updating2_P1.mistakes , mu=8/9, alternative = "two.sided")
+```
+* Number of redundant searches with test trials (platform 1: first 3 choices) vs chance value (0.89): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`  
+
+***  
+
+
+##WM Boxes
+
+###Methods  
+
+####Materials  
+We use two adjacent sliding platforms on top of tables outside the enclosure, 8 identical opaque boxes (16.5 x 7.5 x 7.5 cm) with an opening in the front side (3.5cm x 3.5 cm) filled with toilet paper, and one occluder (free-standing occluder: h x d x w: 38 cm x 22 cm x 64 cm). All boxes can be baited through a hole (diameter: 3cm)in the back. The boxes were presented on a polycarbonate panel (w x d: 64 cm x 40 cm) including a u-shaped add-on (h x d x w: 10 cm x 10 cm x 8.5 cm) located at the right (left platfomr) or left corner (right platform) of the panel (at the side closest to the subject) that could hold the chosen box in place for the subject to extract its content.
+
+```{r boxes_setup, fig.cap="Box WM task setup.", echo=FALSE}
+
+knitr::include_graphics('pictures/wm_boxes_setup.png')
+```
+
+####Procedure  
+
+#####Warm-up  
+In the warm-up phase, there is one platform with four identical, opaque boxes and subjects need to remember one food location over a short retention interval (15 seconds).
+At the beginning of each warm-up trial, E shows the subject a reward (1/16 piece of apple) while calling the subject’s name and taps the reward two times on top of the baited box. E then baits one the boxes via the hole in the backside. Following a retention interval (15 seconds), E pushes the sliding platform forward (while looking to the floor to avoid any inadvertent cuing) and allows the subject to choose one of the boxes by reaching toward and touching a box. E allows the subject to remove the toilet paper from the indicated box. Subjects receive only one choice per trial. Subjects receive 2 warm-up trials.
+
+#####Test  
+In the test phase, there are two platforms with four identical, opaque boxes per platform and subjects need to remember two food locations over a short retention interval (15 seconds). We never bait the same box on both platforms (in terms of their relative spatial position on each platform). 
+At the beginning of each test trial, E shows the subject a reward while calling the subject’s name. E then baits a box on platform 1. Following a short delay (5 seconds), E occludes that array on platform 1 shows a second reward, again calls the subject’s name and moves to platform 2. Another 2 seconds later (in second 7), E baits a box on platform 2 and occludes the array on platform 2. After another 8 seconds (second 15), E pushes the sliding platform forward (while looking to the floor to avoid any inadvertent cuing) and allows the subject to choose one of the boxes by reaching toward and touching a box. E allows the subject to remove the toilet paper from the indicated box. Then subjects are allowed to choose one box from platform 2. Subjects receive only one choice per platform in each trial. Subjects receive 8 test trials in one session. Within this session subjects will complete 2 blocks of 4 trials. In every block every box on the platform will be baited once. All subjects will receive the same order of trials.
+
+####Scoring  
+We score the number of mistakes per trial (0 – 2). With 8 test trials, the number of mistakes can vary between 0 and 16.
+
+
+###Results  
+
+
+####Platform 1 performance
+
+```{r echo=FALSE}
+tt<-t.test( box_individual2$Boxes_P1.mistakes, mu=0.75, alternative = "two.sided")
+```
+* Mean number of mistakes on platform 1 vs chance value (0.75): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+##WM Grid  
+
+###Methods 
+
+####Materials  
+We use two adjacent sliding platforms on top of two tables outside the enclosure and an apparatus (h x w x d: 48 cm x 45 cm x 16 cm ) with 16 compartments (4 x 4) with opaque flap doors (10 cm x 7 cm). All compartments can be baited via the back of the apparatus. For the secondary task, we used three identical blue, opaque cups (height: 10.5 cm, diameter: 7 cm). 
+
+```{r grid_setup, fig.cap="Grid WM task setup.", echo=FALSE}
+
+knitr::include_graphics('pictures/wm_grid_setup.png')
+```
+
+####Procedure  
+
+#####Warm-up  
+At the beginning of each warm-up trial, E calls the subject to draw its attention on the flap-door box on top of the sliding platform. E shows the reward (a quarter banana) to the subject, holds up a flap-door and positions the reward in the respective compartment in full view of the subject. Then, the experimenter releases the flap-door. After the retention interval of 15 sec, E pushes the apparatus to the subject and the subject can search for the food reward.  Subjects receive two warm-up trials.  
+
+#####Test  
+At the beginning of each test trial, E calls the subject to draw its attention on the flap-door box on top of the sliding platform. E shows the reward (a quarter banana) to the subject, holds up a flap-door and positions the reward in the respective compartment in full view of the subject. Then, the experimenter releases the flap-door and occludes the apparatus. In the retention interval of 15 sec, E calls the subject to the adjacent sliding platform. On platform 2, E positions three cups, shows the subject another reward (a peanut) and places the reward under one of the cups. Then, E changes the cup position according to a predetermined order (a single transposition) and the subject is allowed to choose one of the cups. After 15 sec E pushes the apparatus to the subject and the subject can search for the food reward.
+Subjects complete 12 test trials. All compartments except for the four edge compartments will serve as hiding place. The order of baiting of the remaining 12 compartments will be randomized. All individuals will receive the same order of baiting locations across trials.  
+
+####Scoring  
+We score the distance of the first chosen cell from the actual hiding location of the food reward. The distance is calculated as follows:
+$\sqrt{(Chosen_X-Food_X)^2+(Chosen_Y-Food_Y)^2}$.  
+The distance can vary between 0 (food located in first attempt) to 3.6.  
+
+ 
+
+###Results  
+
+#####Test against random choices of all 16 grid cells.  
+
+The simulation is based on 1000000 iterations of 12 random choices of a cell on the 4x4 grid. The distance between these random choices and the hiding location of the food reward was then calculated. The mean distance from the food reward of the these random choices is used as the hypothetical chance value.
+```{r echo=FALSE}
+tt<-t.test( grid_individual$Grid_Distance, mu=1.954, alternative = "two.sided")
+```
+* Mean distance between chosen cell and baited cell vs chance value (all cells: 1.954): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+#####Test against inner cell preference
+The simulation is identical to the aforementioned one but only the inner cells are sampled from resulting in a smaller average distance from the food reward.
+
+```{r echo=FALSE}
+tt<-t.test( grid_individual$Grid_Distance, mu=1.667, alternative = "two.sided")
+```
+* Mean distance between chosen cell and baited cell vs chance value (inner cells only: 1.667): Mean = `r round(tt$estimate, 2)`, 95% CI [`r round(tt$conf.int[1],2)`, `r round(tt$conf.int[2],2)`], *t*(`r tt$parameter`)=`r round(tt$statistic,2)`, *p*=`r round(tt$p.value,3)`
+
+
+
+
+***  
+
+##Plotting correlations
+```{r include=FALSE}
+d <- correlate(WM_task_individual[-1], method="spearman")
+```
+
+```{r include=FALSE}
+#jpeg(file="WM_corrplot.jpeg", width=3800, height=1000, res=300)
+#pdf(file="WM_corrplot.pdf", width=10, height=4)
+d %>%
+  shave(upper = TRUE) %>%
+  rplot(print_cor = TRUE, colors = c("red", "green"), shape = 16) 
+#dev.off()
+#rcorr(as.matrix(WM_task_individual[-1]), type="spearman")
+
+#chart.Correlation(WM_task_individual[-1], histogram=TRUE, pch=19, method = "spearman")
+```
+
+```{r echo=FALSE}
+# Get upper triangle of the correlation matrix
+  get_upper_tri <- function(cormat){
+    cormat[lower.tri(cormat)]<- NA
+    return(cormat)
+  }
+cormat <- round(cor(WM_task_individual[-1], method="pearson", use="pairwise.complete.obs"),2)
+upper_tri <- get_upper_tri(cormat)
+melted_cormat=melt(cormat, na.rm = TRUE)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()+
+  geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+ scale_fill_gradient2(low = "blue", high = "red", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name=" Pearson Correlation") +
+  theme_minimal()+ 
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 10, hjust = 1))+
+  labs(x="",y="")+
+ coord_fixed()
+
+```
+
+```{r include=FALSE}
+write.csv(WM_task_individual, file = "../EF_tasks/WM_task_individual_corr.csv", row.names=FALSE)
+```
