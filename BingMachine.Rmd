@@ -1,0 +1,23 @@
+---
+title: "Bing machine analysis"
+author: "Zeynep Civelek"
+date: "July 6, 2020"
+output: word_document
+---
+
+```{r}
+#PREPARE
+R.Version()#for referencing, shows you which R version you are using
+rm(list=ls())#removes any other items in your workspace
+ls()#check whether workspace is empty
+```
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "C:\\")
+```
+
+```{r}
+#LOAD DATA
+setwd("C:/Users/Zeynep/Desktop/EF-analyses")#sets the working directory, this is where your datafile is
+bing <-read.csv("data_bing.csv",header=TRUE, sep = ";")
+```
