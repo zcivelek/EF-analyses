@@ -17,7 +17,116 @@ knitr::opts_knit$set(root.dir = "C:\\")
 ```
 
 ```{r}
-#LOAD DATA
+#LOAD DATA AND LIBRARIES
 setwd("C:/Users/Zeynep/Desktop/EF-analyses")#sets the working directory, this is where your datafile is
-bing <-read.csv("data_bing.csv",header=TRUE, sep = ";")
+bing <-read.csv("bing_data.csv",header=TRUE)
+library(lme4)
+library(readr)
+library(tidyverse)
+library(sjPlot)
+library(ggthemes)
+library(gridExtra)
+library(reshape2)
+library(car)
+library("ggpubr")
+library(dplyr)
 ```
+
+```{r}
+#OVERVIEW
+str(bing)
+
+#recode variables
+bing$ID <- as.factor(bing$ID)
+bing$Age_group <- as.factor(bing$Age_group)
+
+levels(bing$Age_group)
+
+str(bing)
+```
+
+
+# Dropouts
+```{r}
+dropouts<-subset(bing, Dropout == "yes")
+```
+We have 5 dropouts (1 child stopped after 4 trials, 1 child stopped after 8 trials, 1 child stopped after 9 trials, 1 child where RA gave away the game by saying "let's watch and listen", 1 child with an experimenter error in trial 11 (wrong noise) so we only had 10 trials).
+
+# Which children to include?
+We eventually decided to include children who have completed 75% (i.e., 15 trials) of the test trials. 
+
+# Removing the dropouts from data
+```{r}
+bingvalid<-subset(bing, Dropout=="no")
+#aggregating by ID to see the sample size
+bing_individual <- bingvalid %>%
+  group_by(ID, Gender, Age.months, Midtesting.age.months, Midtesting_age_group) %>% 
+  summarize(Success_in0and1 = mean(Success_in0and1)) %>% 
+  ungroup()%>%
+  group_by(Midtesting_age_group)%>%
+  add_count(Success_in0and1)
+```
+Final **sample size is 65**.
+
+# Sample description
+## Gender distribution
+```{r}
+table(bing_individual$Gender)
+table(bing_individual$Gender, bing_individual$Midtesting_age_group)
+boys <- subset(bing_individual, Gender == "m")
+girls <- subset(bing_individual, Gender == "f")
+hist(boys$Midtesting_age_group)
+shapiro.test(boys$Midtesting_age_group)#is not normally distributed
+hist(girls$Midtesting_age_group)
+shapiro.test(girls$Midtesting_age_group)#is not normally distributed
+wilcox.test(bing_individual$Midtesting_age_group ~ bing_individual$Gender, alternative = "two.sided")
+```
+There are **39 girls** and **26 boys**.
+
+- Girls: 22 3y, 14 4y, 3 5y
+- Boys: 10 3y, 12 4y, 4 5y
+
+There is no difference in the age distribution between boys and girls.
+
+## Age
+### Age at beginning of testing
+```{r}
+mean(bing_individual$Age.months)
+sd(bing_individual$Age.months)
+min(bing_individual$Age.months)
+max(bing_individual$Age.months)
+table(bing_individual$Age.months)
+```
+At the beginning of testing, the children who had valid data on the Bing Machine task were on average 47.57 months (SD = 6.93, range 36-64) old. There were 34 3-year-olds, 26 4-year-olds, and 5 5-year-olds.
+
+### Age in the middle of testing
+```{r}
+mean(bing_individual$Midtesting.age.months)
+sd(bing_individual$Midtesting.age.months)
+min(bing_individual$Midtesting.age.months)
+max(bing_individual$Midtesting.age.months)
+table(bing_individual$Midtesting.age.months)
+```
+In the middle of testing, the children who had valid data on the Bing Machine task were on average **49.29 months (SD = 6.90, range 39-65)** old. There were 
+
+- 32 3-year-olds
+- 26 4-year-olds
+- 7 5-year-olds
+
+### Age mediansplit by entire sample
+Median is 49 months
+
+```{r}
+median_split <- ifelse(bing_individual$Midtesting.age.months <= 49, "young", "old")
+table(median_split)
+```
+
+There are **34 young** and **31 old** children.
+
+# Warm-up
+```{r}
+levels(bingvalid$Training.Crit.reached)
+```
+All children (N=65) passed the transparent training within 3 trials (the minimum number of required trials to pass).
+
+
