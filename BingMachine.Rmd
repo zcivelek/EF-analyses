@@ -129,4 +129,81 @@ levels(bingvalid$Training_Crit_reached)
 ```
 All children (N=65) passed the transparent training within 3 trials (the minimum number of required trials to pass).
 
+Number of correct trials in Test
+```{r}
+mean(bingvalid$Test_Nr_CorrectTrials)
+sd(bingvalid$Test_Nr_CorrectTrials)
+min(bingvalid$Test_Nr_CorrectTrials)
+max(bingvalid$Test_Nr_CorrectTrials)
+quantile(bingvalid$Test_Nr_CorrectTrials)
+hist(bingvalid$Test_Nr_CorrectTrials)
 
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Midtesting_age_group, mean)
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Midtesting_age_group, sd)
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Midtesting_age_group, min)
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Midtesting_age_group, max)
+
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Median_split_age, mean)
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Median_split_age, sd)
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Median_split_age, min)
+tapply(bingvalid$Test_Nr_CorrectTrials, bingvalid$Median_split_age, max)
+```
+The average number of correct trials was 9.70 (SD = 2.57, range 5-17). 50% of the children had 9 or fewer trials correct. The distribution of correct trials is skewed.
+Split by age:
+- 3-year-olds: M = 9.53 (2.32, range 6-17)
+- 4-year-olds: M = 9.76 (2.79, range 5-17)
+- 5-year-olds: M = 10.29 (2.72, range 7-14)
+Thus, numerically, all age groups seem to be performing equally.
+In terms of the median split of age, we found:
+- young children: 9.71 (SD = 2.38, range 6-17)
+- old children: 9.70 (SD = 2.76, range 5-17)
+So using the median split, there was no difference between the groups.
+
+DV: Proportion correct
+```{r}
+mean(bingvalid$ProportionCorrect)
+sd(bingvalid$ProportionCorrect)
+min(bingvalid$ProportionCorrect)
+max(bingvalid$ProportionCorrect)
+quantile(bingvalid$ProportionCorrect)
+hist(bingvalid$ProportionCorrect)
+shapiro.test(bingvalid$ProportionCorrect)#not normally distributed
+
+tapply(bingvalid$ProportionCorrect, bingvalid$Midtesting_age_group, mean)
+tapply(bingvalid$ProportionCorrect, bingvalid$Midtesting_age_group, sd)
+tapply(bingvalid$ProportionCorrect, bingvalid$Midtesting_age_group, min)
+tapply(bingvalid$ProportionCorrect, bingvalid$Midtesting_age_group, max)
+
+tapply(bingvalid$ProportionCorrect, bingvalid$Median_split_age, mean)
+tapply(bingvalid$ProportionCorrect, bingvalid$Median_split_age, sd)
+tapply(bingvalid$ProportionCorrect, bingvalid$Median_split_age, min)
+tapply(bingvalid$ProportionCorrect, bingvalid$Median_split_age, max)
+```
+The average proportion of correct trials was 49.03% (SD = 13.23, range 30-93.75%). 50% of the children had 45% or a smaller proportion of their trials correct. The DV is not normally distributed, W = 0.907, p < .001.
+
+Split by age:
+- 3-year-olds: M = 47.65% (11.60, range 30-85%)
+- 4-year-olds: M = 50.09% (14.80, range 31.25-93.75%)
+- 5-year-olds: M = 51.43 (13.60, range 35-70%)
+Thus, numerically, all age groups seem to perform equally.
+In terms of the median split of age, we found:
+- young children: 48.53 (SD = 11.92, range 30-85%)
+- old children: 49.50 (SD = 14.55, range 31.25-93.75%)
+So using the median split, there was no difference between the groups.
+
+oes performance deviate from chance?
+```{r}
+boxplot(bing_individual$Success_in0and1)
+
+wilcox.test(bing_individual$Success_in0and1, mu = 0.5)
+
+young <-bing_individual%>%
+  filter(Median_split_age == "young")
+wilcox.test(young$Success_in0and1, mu = 0.5)
+
+old <-bing_individual%>%
+  filter(Median_split_age == "old")
+wilcox.test(old$Success_in0and1, mu = 0.5)
+```
+
+Children's proportion correct (74.51%, SD = 12.67, range 25-100%) is significantly better than chance, V = 10789, p < .001. Young children perform better than chance (V = 2809.5, p < .001) as well as older children (V = 2621, p < .001).
