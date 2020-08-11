@@ -1,7 +1,7 @@
 ---
 title: "Bing machine analysis"
 author: "Zeynep Civelek"
-date: "July 6, 2020"
+date: "August 11, 2020"
 output: word_document
 ---
 
@@ -30,6 +30,7 @@ library(reshape2)
 library(car)
 library("ggpubr")
 library(dplyr)
+library(ggplot2)
 ```
 
 ```{r}
@@ -189,9 +190,9 @@ Thus, numerically, all age groups seem to perform equally.
 In terms of the median split of age, we found:
 - young children: 48.53 (SD = 11.92, range 30-85%)
 - old children: 49.50 (SD = 14.55, range 31.25-93.75%)
-So using the median split, there was no difference between the groups.
+So using the median split, there doesn't seem to be a difference between the groups.
 
-oes performance deviate from chance?
+Does performance deviate from chance?
 ```{r}
 boxplot(bing_individual$Success_in0and1)
 
@@ -206,4 +207,126 @@ old <-bing_individual%>%
 wilcox.test(old$Success_in0and1, mu = 0.5)
 ```
 
-Children's proportion correct (74.51%, SD = 12.67, range 25-100%) is significantly better than chance, V = 10789, p < .001. Young children perform better than chance (V = 2809.5, p < .001) as well as older children (V = 2621, p < .001).
+Children's proportion correct is not different from chance, V = 610.5, p = .352. Neither young (V = 182, p = .447) nor old children (V = 137, p = .719) performed differently than chance.
+
+Boxplot:
+```{r}
+
+p<-  ggplot(data=bing_individual, aes(x=rep(1, 65), y=Success_in0and1)) +
+  geom_boxplot(outlier.colour = "black")+
+  ylim(0,1)+
+  xlim(0,2)+
+  labs(x="",y="Proportion of correct trials")+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  ggtitle("Bing Machine")
+
+p + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+ theme(axis.text.x = element_blank()) + theme(axis.ticks.x = element_blank()) +  geom_hline(yintercept=0.5, linetype="dashed", color = "red") + geom_count()
+```
+Boxplot split by age:
+```{r}
+library(forcats)
+
+bing_individual$Median_split_age<-fct_relevel(bing_individual$Median_split_age, "young")
+#changes order of boxplots (young before old)
+
+p1<-  ggplot(
+  data=bing_individual, aes(x=rep(1, 65), y=Success_in0and1, fill = Median_split_age))+
+  geom_boxplot(outlier.colour = "black", position=position_dodge(1.5))+
+  ylim(0,1)+
+  xlim(0,2)+
+  #scale_size(range = c(.01, 24))+
+  labs(x="",y="Proportion of correct trials")+
+  theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  ggtitle("Bing Machine")
+
+#rep is from 1 to how many IDs there are; fill is the grouping variable
+#position dodge changes the space between the 2 boxplots
+
+p1 +  geom_hline(yintercept=0.5, linetype="dashed", color = "red") +
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+ theme(axis.text.x = element_blank()) + theme(axis.ticks.x = element_blank()) +
+  geom_count(colour = "black", position = position_jitterdodge(0,0,1.5), alpha = 0.5) + scale_size_area(max_size=10)+
+  scale_fill_discrete(name = "Age group midtesting (median split)", labels = c("young (36-49 months), n = 34", "old (50-73 months), n = 31"))
+
+#y intercept adds chance line
+#removes grey background, grid lines and x axis ticks
+#says dots should vary in size according to count, adds the individual points to both boxplots and also moves them in space, makes dots slightly transparent
+#changes label for the legend
+```
+Boxplot split by the three age groups:
+```{r}
+str(bing_individual)
+bing_individual$Midtesting_age_group <- as.factor(bing_individual$Midtesting_age_group)
+
+p1<-ggplot(data=bing_individual, aes(x=factor(Midtesting_age_group), y=Success_in0and1, fill=factor(Midtesting_age_group))) +
+  geom_boxplot(aes(group=Midtesting_age_group), outlier.colour = "black") + 
+      ylim(0,1)+
+  geom_point(alpha=0.3) +
+  labs(x="",y="Proportion of correct trials")+
+  ggtitle("Bing Machine")
+
+#rep is from 1 to how many IDs there are; fill is the grouping variable
+#position dodge changes the space between the 2 boxplots
+
+p1 +  geom_hline(yintercept=0.5, linetype="dashed", color = "red") +
+  theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+ theme(axis.text.x = element_blank()) + theme(axis.ticks.x = element_blank()) +
+  geom_count(colour = "black", position = position_jitterdodge(0,0,1), alpha = 0.5) 
+
+#y intercept adds chance line
+#removes grey background, grid lines and x axis ticks
+#says dots should vary in size according to count, adds the individual points to both boxplots and also moves them in space, makes dots slightly transparent
+#changes label for the legend
+```
+Can children's performance be predicted by age?
+```{r}
+
+bingvalid$z.age.midtesting=as.vector(scale(bingvalid$Midtesting_age_months))
+bingvalid$z.trialno=as.vector(scale(bingvalid$Trial_nr))
+
+full<-glmer(Success_in0and1 ~ z.age.midtesting + z.trialno + z.age.midtesting:z.trialno + (1+z.trialno|id), data=bingvalid, family = binomial, control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000)))#singular fit
+```
+
+Comparison against null model
+```{r}
+null<-glmer(Success_in0and1 ~ 1 + (1|id) + (0+z.trialno|id), data=bingvalid, family = binomial, control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000)))
+
+anova(null, full, test="Chisq")
+summary(full)
+modeldrop=drop1(full, test="Chisq",control=contr)
+round(modeldrop,3)
+```
+Trial number, age, and the interaction between trial number and age together does not explain the data better than a null model only containing an intercept, X2(4) = 5.781 p = .216. But the interaction term is not significant x2(1)=2.291, p=0.13 so it is removed from the model to explore the main effect of trial number and age.
+
+```{r}
+full2<-glmer(Success_in0and1 ~ z.age.midtesting + z.trialno + (1|id) + (0+z.trialno|id), data=bingvalid, family = binomial, control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000)))
+
+null2<-glmer(Success_in0and1 ~ 1 + (1|id) + (0+z.trialno|id), data=bingvalid, family = binomial, control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000)))
+
+anova(null2, full2, test="Chisq")
+```
+The model including trial number and age can explain the data significantly better than a null model only containing an intercept, X2(2) = 7.255 p < .05.
+
+Effect of age and trial number
+```{r}
+modeldrop2=drop1(full2, test="Chisq",control=contr)
+round(modeldrop2,3)
+```
+
+There is a significant effect of trial number, X2(1) = 7.014, p < .01, but no effect of age X2(1) = 0.272, p = .602.
+
+Plot
+```{r}
+trialnoagg <- aggregate(bingvalid$Success_in0and1, by = list(trialno = bingvalid$Trial_nr), function(x) c(mean = mean(x), sd = sd(x)))
+trialnoagg <- do.call(data.frame, trialnoagg)
+
+colnames(trialnoagg) <- c("trial.no", "mean", "sd")
+
+trialnoagg$names <- c(paste(trialnoagg$trialno, "trial number"))
+
+limits <- aes(ymax = trialnoagg$mean + trialnoagg$sd,
+              ymin = trialnoagg$mean - trialnoagg$sd)
+
+p=ggplot(trialnoagg, aes(x=factor(trial.no), y=mean, group=1)) +geom_line() + xlab("")
+p + geom_line(size=1.2) + geom_errorbar(limits, position = position_dodge(0.9), width = 0.10) + labs(x= "Trial number", y = "Mean number of correct choices") + ggtitle("Performance across trials") + geom_hline(yintercept=0.50, linetype="dashed", color="red", size=1)  + theme(legend.text = element_text(size = 8)) + ylim(0.00,1.00)+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),panel.background = element_blank())
+
+```
+Performance seems to get better over trials but this is expected in this task as children have no way of knowing where to locate the reward in the first trial.
