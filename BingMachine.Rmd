@@ -18,8 +18,20 @@ knitr::opts_knit$set(root.dir = "C:\\")
 
 ```{r}
 #LOAD DATA AND LIBRARIES
-setwd("C:/Users/Zeynep/Desktop/EF-analyses")#sets the working directory, this is where your datafile is
+setwd("C:/Users/zeyne/OneDrive/Desktop/EF-analyses")
+getwd()
 bing <-read.csv("bing_data.csv",header=TRUE)
+#install.packages("lme4")
+#install.packages("readr")
+#install.packages("tidyverse")
+#install.packages("sjPlot")
+#install.packages("ggthemes")
+#install.packages("gridExtra")
+#install.packages("reshape2")
+#install.packages("car")
+#install.packages("ggpubr")
+#install.packages("dplyr")
+#install.packages("ggplot2")
 library(lme4)
 library(readr)
 library(tidyverse)
@@ -224,6 +236,7 @@ p + theme_bw() + theme(panel.grid.major = element_blank(), panel.grid.minor = el
 ```
 Boxplot split by age:
 ```{r}
+
 library(forcats)
 
 bing_individual$Median_split_age<-fct_relevel(bing_individual$Median_split_age, "young")
@@ -282,7 +295,7 @@ Can children's performance be predicted by age?
 bingvalid$z.age.midtesting=as.vector(scale(bingvalid$Midtesting_age_months))
 bingvalid$z.trialno=as.vector(scale(bingvalid$Trial_nr))
 
-full<-glmer(Success_in0and1 ~ z.age.midtesting + z.trialno + z.age.midtesting:z.trialno + (1+z.trialno|id), data=bingvalid, family = binomial, control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000)))#singular fit
+full<-glmer(Success_in0and1 ~ z.age.midtesting + z.trialno + z.age.midtesting:z.trialno + (1|id) + (0+z.trialno|id), data=bingvalid, family = binomial, control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=100000)))#singular fit
 ```
 
 Comparison against null model
