@@ -343,3 +343,25 @@ p + geom_line(size=1.2) + geom_errorbar(limits, position = position_dodge(0.9), 
 
 ```
 Performance seems to get better over trials but this is expected in this task as children have no way of knowing where to locate the reward in the first trial.
+
+```{r}
+#plotting trial no with CIs
+
+source("boot_glmm.r")#requires centering of all predictors apart the ones one is interested in. We are interested in both.
+boot.res=boot.glmm.pred(model.res=res, excl.warnings=T,
+nboots=1000, para=F, resol=36, use="z.Trial_nr")
+boot.res$ci.estimates
+boot.res$ci.predicted
+par(mar=c(3, 3, 0.2, 0.2), mgp=c(1.7, 0.3, 0), las=1, tcl=-0.15)
+plot(x=Shelf.clean.test$Trial_nr, y=Shelf.clean.test$Success, pch=19, las=2, ylim=c(0, 1),
+xlab="Trial number", ylab="Probability of success", cex=0.1*sqrt(Shelf.clean.test$ID))
+plot.xvals=seq(from=min(Shelf.clean.test$Trial_nr), to=max(Shelf.clean.test$Trial_nr),
+length.out=36)
+lines(x=plot.xvals, y=boot.res$ci.predicted$fitted,
+lty=2)
+lines(x=plot.xvals, y=boot.res$ci.predicted$lower.cl,
+lty=3)
+lines(x=plot.xvals, y=boot.res$ci.predicted$upper.cl,
+lty=3)
+```
+
